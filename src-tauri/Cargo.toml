@@ -1,6 +1,6 @@
 [package]
 name = "clip-sync"
-version = "0.2.1"
+version = "0.3.0"
 description = "Cross-platform clipboard sync tool"
 authors = ["you"]
 edition = "2021"
@@ -28,5 +28,6 @@ get_if_addrs = "0.5"
 log = { version = "0.4", features = ["std"] }
 base64 = "0.22"
 dirs = "5"
+image = { version = "0.25", default-features = false, features = ["png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"

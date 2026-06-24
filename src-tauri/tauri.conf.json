@@ -1,6 +1,6 @@
 {
   "productName": "ClipSync",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "identifier": "com.clipsync.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -19,7 +19,7 @@
         "visible": false,
         "skipTaskbar": true,
         "decorations": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "center": true
       }
     ],

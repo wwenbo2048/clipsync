@@ -12,7 +12,7 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -76,9 +76,12 @@ pub fn run() {
                         let app_for_callback = app_for_shortcut.clone();
                         if let Err(e) = app_for_shortcut.global_shortcut().on_shortcut(
                             shortcut_str.as_str(),
-                            move |_app, _event, _shortcut| {
+                            move |_app, _shortcut, event| {
+                                if event.state() != ShortcutState::Pressed {
+                                    return;
+                                }
                                 if let Some(window) = app_for_callback.get_webview_window("main") {
-                                    if window.is_visible().unwrap_or(false) {
+                                    if window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false) {
                                         let _ = window.hide();
                                     } else {
                                         let _ = window.show();

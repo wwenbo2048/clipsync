@@ -5,9 +5,44 @@ use tauri::{
     AppHandle, Manager,
 };
 
+/// 检测系统是否使用中文语言环境
+fn is_chinese_locale() -> bool {
+    // macOS / Linux: 检查 LANG / LC_ALL 环境变量
+    if let Ok(lang) = std::env::var("LANG") {
+        if lang.starts_with("zh") {
+            return true;
+        }
+    }
+    if let Ok(lang) = std::env::var("LC_ALL") {
+        if lang.starts_with("zh") {
+            return true;
+        }
+    }
+    // Windows: 检查系统语言代码
+    #[cfg(target_os = "windows")]
+    {
+        // Windows 上 LANG 环境变量可能不存在，使用 GetACP 或其他方式
+        // 简化处理：中文 Windows 默认 locale 为 2052 (0x0804) 或 1028 (0x0404)
+        // 这里通过环境变量做近似判断
+        if std::env::var("LANG").is_err() && std::env::var("LC_ALL").is_err() {
+            // 默认中文 Windows 环境下返回 true
+            // 用户可以通过前端语言切换覆盖 UI 语言
+            return false; // Windows 上默认使用英文，前端语言切换为主
+        }
+    }
+    false
+}
+
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let zh = is_chinese_locale();
+    let (show_text, quit_text, tooltip_text) = if zh {
+        ("显示窗口", "退出", "ClipSync - 剪贴板同步")
+    } else {
+        ("Show Window", "Quit", "ClipSync - Clipboard Sync")
+    };
+
+    let show = MenuItem::with_id(app, "show", show_text, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", quit_text, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
 
     let icon = Image::from_bytes(include_bytes!("../icons/128x128.png"))
@@ -17,7 +52,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .icon(icon)
         .icon_as_template(false)
         .menu(&menu)
-        .tooltip("ClipSync - 剪贴板同步")
+        .tooltip(tooltip_text)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 show_main_window(app);

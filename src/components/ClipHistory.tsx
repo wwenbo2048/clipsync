@@ -1,4 +1,5 @@
 import { ClipboardEntry } from "../App";
+import { useI18n } from "../i18n/I18nContext";
 
 interface ClipHistoryProps {
   entries: ClipboardEntry[];
@@ -9,19 +10,21 @@ interface ClipHistoryProps {
 }
 
 export function ClipHistory({ entries, onCopy, onClear, onDownload, onOpenFolder }: ClipHistoryProps) {
+  const { t, locale } = useI18n();
+
   if (entries.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">📋</div>
-        <p>暂无剪贴板记录</p>
-        <p className="empty-hint">复制文本或文件后将自动同步到所有已连接设备</p>
+        <p>{t.history_empty}</p>
+        <p className="empty-hint">{t.history_empty_hint}</p>
       </div>
     );
   }
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString("zh-CN", {
+    return date.toLocaleTimeString(locale, {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -44,14 +47,42 @@ export function ClipHistory({ entries, onCopy, onClear, onDownload, onOpenFolder
   return (
     <div className="clip-history">
       <div className="history-header">
-        <span>共 {entries.length} 条记录</span>
+        <span>{t.history_count(entries.length)}</span>
         <button className="clear-btn" onClick={onClear}>
-          清空
+          {t.history_clear}
         </button>
       </div>
       <div className="history-list">
         {entries.map((entry) => {
           const isFile = entry.content_type === "file";
+          const isImage = entry.content_type === "image";
+
+          if (isImage) {
+            return (
+              <div
+                key={entry.id}
+                className="history-item history-item-file"
+              >
+                <div className="file-header">
+                  <span className="file-icon">🖼️</span>
+                  <div className="file-info">
+                    <div className="file-name">
+                      {t.history_image} ({formatFileSize(entry.file_size)})
+                    </div>
+                  </div>
+                  <div className="file-action">
+                    <span className="download-status done">
+                      {entry.source === "本机" ? t.history_local : "✓"}
+                    </span>
+                  </div>
+                </div>
+                <div className="history-meta">
+                  <span className="history-source">{entry.source}</span>
+                  <span className="history-time">{formatTime(entry.timestamp)}</span>
+                </div>
+              </div>
+            );
+          }
 
           if (isFile) {
             // 判断是否是多文件或文件夹
@@ -80,11 +111,11 @@ export function ClipHistory({ entries, onCopy, onClear, onDownload, onOpenFolder
                           onDownload(entry.transfer_id!);
                         }}
                       >
-                        下载
+                        {t.history_download}
                       </button>
                     )}
                     {entry.download_status === "downloading" && (
-                      <span className="download-status downloading">下载中...</span>
+                      <span className="download-status downloading">{t.history_downloading}</span>
                     )}
                     {entry.download_status === "done" && (
                       <button
@@ -94,11 +125,11 @@ export function ClipHistory({ entries, onCopy, onClear, onDownload, onOpenFolder
                           if (entry.file_path) onOpenFolder(entry.file_path);
                         }}
                       >
-                        📂 打开文件夹
+                        {t.history_open_folder}
                       </button>
                     )}
                     {entry.download_status == null && (
-                      <span className="download-status done">本机</span>
+                      <span className="download-status done">{t.history_local}</span>
                     )}
                   </div>
                 </div>
@@ -126,9 +157,9 @@ export function ClipHistory({ entries, onCopy, onClear, onDownload, onOpenFolder
                     e.stopPropagation();
                     onCopy(entry.text);
                   }}
-                  title="复制"
+                  title={t.history_copy}
                 >
-                  复制
+                  {t.history_copy}
                 </button>
               </div>
               <div className="history-meta">

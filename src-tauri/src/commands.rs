@@ -402,7 +402,7 @@ pub async fn set_shortcut(
     state: State<'_, Arc<AppState>>,
     shortcut: String,
 ) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
     // 解除旧快捷键
     let old_shortcut = state.shortcut.lock().await.clone();
@@ -414,9 +414,12 @@ pub async fn set_shortcut(
     if !shortcut.is_empty() {
         let app_clone = app.clone();
         app.global_shortcut()
-            .on_shortcut(shortcut.as_str(), move |_app, _event, _shortcut| {
+            .on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
                 if let Some(window) = app_clone.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
+                    if window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false) {
                         let _ = window.hide();
                     } else {
                         let _ = window.show();

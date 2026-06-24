@@ -391,6 +391,65 @@ fn hash_paths(paths: &[String]) -> u64 {
     hasher.finish()
 }
 
+/// 对字节切片做哈希，用于去重
+fn hash_bytes(data: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    data.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// 带超时保护的剪贴板图片读取，返回 PNG 编码后的字节
+async fn safe_get_clipboard_image_png() -> Result<Option<Vec<u8>>, String> {
+    let result = tokio::time::timeout(
+        Duration::from_secs(3),
+        tokio::task::spawn_blocking(|| {
+            use image::ImageBuffer;
+            use image::Rgba;
+            use std::io::Cursor;
+
+            match arboard::Clipboard::new() {
+                Ok(mut clipboard) => {
+                    match clipboard.get_image() {
+                        Ok(img) => {
+                            let (w, h) = (img.width as u32, img.height as u32);
+                            // arboard bytes 是 RGBA 原始字节
+                            let pixels = img.bytes.as_ref().to_vec();
+                            if w == 0 || h == 0 || pixels.len() != (w as usize * h as usize * 4) {
+                                return Ok(None);
+                            }
+                            let img_buffer =
+                                match ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(w, h, pixels) {
+                                    Some(b) => b,
+                                    None => return Ok(None),
+                                };
+                            let mut png_bytes = Vec::new();
+                            {
+                                let mut cursor = Cursor::new(&mut png_bytes);
+                                if let Err(e) =
+                                    img_buffer.write_to(&mut cursor, image::ImageFormat::Png)
+                                {
+                                    return Err(format!("PNG encode failed: {}", e));
+                                }
+                            }
+                            Ok(Some(png_bytes))
+                        }
+                        Err(arboard::Error::ContentNotAvailable) => Ok(None),
+                        Err(e) => Err(format!("{}", e)),
+                    }
+                }
+                Err(e) => Err(format!("Clipboard::new failed: {}", e)),
+            }
+        }),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(inner)) => inner,
+        Ok(Err(join_err)) => Err(format!("spawn_blocking failed: {}", join_err)),
+        Err(_) => Err("Clipboard image read timed out (3s)".to_string()),
+    }
+}
+
 /// 带超时保护的剪贴板文本读取（防止 arboard 挂起卡死 monitor_loop）
 async fn safe_get_clipboard_text() -> Result<Option<String>, String> {
     let result = tokio::time::timeout(
@@ -421,6 +480,7 @@ async fn safe_get_clipboard_text() -> Result<Option<String>, String> {
 async fn monitor_loop(state: Arc<AppState>) {
     let mut last_text = String::new();
     let mut last_file_hash: u64 = 0;
+    let mut last_image_hash: u64 = 0;
     let mut last_seq: u32 = clipboard_sequence();
     #[cfg(target_os = "macos")]
     let mut last_change_count: i64 = pasteboard_change_count();
@@ -605,7 +665,60 @@ async fn monitor_loop(state: Arc<AppState>) {
             }
         }
 
-        // 没有文件则检测文本
+        // 没有文件则检测图片
+        if !processed {
+            match safe_get_clipboard_image_png().await {
+                Ok(Some(png_bytes)) => {
+                    let img_hash = hash_bytes(&png_bytes);
+
+                    // 检查是否是远程收到的图片（防止回弹广播）
+                    let remote_hash = state
+                        .last_remote_image_hash
+                        .load(Ordering::SeqCst);
+                    let is_remote = remote_hash != 0 && img_hash == remote_hash;
+
+                    if is_remote {
+                        last_image_hash = img_hash;
+                        processed = true;
+                    } else if img_hash != last_image_hash {
+                        last_image_hash = img_hash;
+                        last_file_hash = 0;
+                        last_text.clear();
+                        state
+                            .written_placeholder_hash
+                            .store(0, Ordering::SeqCst);
+                        state
+                            .last_remote_image_hash
+                            .store(0, Ordering::SeqCst);
+                        state
+                            .last_remote_text_hash
+                            .store(0, Ordering::SeqCst);
+                        log::info!(
+                            "Clipboard image detected: {} bytes PNG",
+                            png_bytes.len()
+                        );
+                        crate::transport::broadcast_clipboard_image(
+                            state.clone(),
+                            png_bytes,
+                        )
+                        .await;
+                        processed = true;
+                    } else {
+                        // 图片哈希未变（重复检测）
+                        processed = true;
+                    }
+                }
+                Ok(None) => {
+                    // 没有图片内容，继续检测文本
+                }
+                Err(e) => {
+                    log::warn!("Failed to read clipboard image: {}", e);
+                    // 读取失败，继续尝试文本
+                }
+            }
+        }
+
+        // 没有文件和图片则检测文本
         if !processed {
             match safe_get_clipboard_text().await {
                 Ok(Some(text)) => {

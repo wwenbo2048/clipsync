@@ -676,3 +676,113 @@ body {
   color: var(--accent);
   font-weight: 500;
 }
+
+/* Language Selector */
+.lang-select-wrapper {
+  position: relative;
+}
+
+.lang-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.lang-select-trigger:hover {
+  border-color: var(--accent);
+}
+
+.lang-select-trigger.open {
+  border-color: var(--accent);
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.lang-globe {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.lang-current-name {
+  flex: 1;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.lang-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.lang-chevron.up {
+  transform: rotate(180deg);
+}
+
+.lang-select-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: lang-list-in 0.15s ease-out;
+}
+
+.lang-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lang-option:hover {
+  background: rgba(79, 195, 247, 0.08);
+}
+
+.lang-option.active {
+  background: rgba(79, 195, 247, 0.12);
+}
+
+.lang-option-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.lang-option.active .lang-option-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.lang-check {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+@keyframes lang-list-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

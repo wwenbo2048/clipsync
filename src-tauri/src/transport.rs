@@ -342,6 +342,51 @@ async fn broadcast_to_all(state: Arc<AppState>, msg_json: String) {
 
 // ========================== 广播函数 ==========================
 
+/// 广播图片剪贴板到所有已连接设备
+pub async fn broadcast_clipboard_image(state: Arc<AppState>, png_bytes: Vec<u8>) {
+    let png_b64 = BASE64.encode(&png_bytes);
+
+    let msg = WsMessage {
+        id: uuid::Uuid::new_v4().to_string(),
+        msg_type: "clipboard".to_string(),
+        content_type: "image".to_string(),
+        data: png_b64,
+        timestamp: current_timestamp(),
+        sender_id: state.local_id.clone(),
+        sender_name: state.local_name.clone(),
+    };
+
+    {
+        let mut seen = state.seen_messages.lock().await;
+        seen.insert(msg.id.clone());
+    }
+
+    let entry = ClipboardEntry::new_image(
+        msg.id.clone(),
+        msg.timestamp,
+        "本机".to_string(),
+        png_bytes.len() as u64,
+    );
+    {
+        let mut history = state.clipboard_history.lock().await;
+        history.insert(0, entry);
+        if history.len() > 20 {
+            history.truncate(20);
+        }
+    }
+
+    let msg_json = match serde_json::to_string(&msg) {
+        Ok(j) => j,
+        Err(_) => return,
+    };
+
+    log::info!("Broadcasting image: {} bytes PNG", png_bytes.len());
+
+    broadcast_to_all(state.clone(), msg_json).await;
+
+    notify_clipboard_received(&state, &msg).await;
+}
+
 /// 广播文本剪贴板到所有已连接设备
 pub async fn broadcast_clipboard(state: Arc<AppState>, text: String) {
     let msg = WsMessage {
@@ -482,6 +527,9 @@ async fn handle_ws_message(state: &AppState, msg: &WsMessage) {
         "clipboard" if msg.content_type == "text" => {
             handle_clipboard_text(state, msg).await;
         }
+        "clipboard" if msg.content_type == "image" => {
+            handle_clipboard_image(state, msg).await;
+        }
         "file-start" => {
             handle_file_start(state, msg).await;
         }
@@ -498,6 +546,97 @@ async fn handle_ws_message(state: &AppState, msg: &WsMessage) {
             log::debug!("Unknown message type: {}", msg.msg_type);
         }
     }
+}
+
+/// 处理图片剪贴板消息
+async fn handle_clipboard_image(state: &AppState, msg: &WsMessage) {
+    // 不处理自己发的消息
+    if msg.sender_id == state.local_id {
+        return;
+    }
+
+    // 解码 base64 → PNG 字节
+    let png_bytes = match BASE64.decode(msg.data.as_bytes()) {
+        Ok(b) => b,
+        Err(e) => {
+            log::warn!("Failed to decode image base64: {}", e);
+            return;
+        }
+    };
+
+    // 设置远程图片哈希，防止 monitor 回弹广播
+    {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        use std::sync::atomic::Ordering;
+        let mut hasher = DefaultHasher::new();
+        png_bytes.hash(&mut hasher);
+        let hash = hasher.finish();
+        state.last_remote_image_hash.store(hash, Ordering::SeqCst);
+    }
+
+    // 解码 PNG → RGBA
+    let img = match image::load_from_memory(&png_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            log::warn!("Failed to decode PNG: {}", e);
+            return;
+        }
+    };
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let pixels = rgba.into_raw();
+
+    // 使用 guard 确保 is_writing_clipboard 始终被重置
+    struct WritingGuard<'a>(&'a AppState);
+    impl<'a> Drop for WritingGuard<'a> {
+        fn drop(&mut self) {
+            use std::sync::atomic::Ordering;
+            self.0.is_writing_clipboard.store(false, Ordering::SeqCst);
+        }
+    }
+
+    // 获取剪贴板写入互斥锁，防止并发操作损坏系统剪贴板
+    let _write_guard = state.clipboard_write_lock.lock().await;
+
+    {
+        use std::sync::atomic::Ordering;
+        state.is_writing_clipboard.store(true, Ordering::SeqCst);
+    }
+    let _flag_guard = WritingGuard(state);
+
+    // 写入图片到剪贴板
+    {
+        use std::borrow::Cow;
+        let img_data = arboard::ImageData {
+            width: width as usize,
+            height: height as usize,
+            bytes: Cow::Owned(pixels),
+        };
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Err(e) = clipboard.set_image(img_data) {
+                log::warn!("Failed to write image to clipboard: {}", e);
+            }
+        }
+    }
+
+    sleep(Duration::from_millis(500)).await;
+
+    let entry = ClipboardEntry::new_image(
+        msg.id.clone(),
+        msg.timestamp,
+        msg.sender_name.clone(),
+        png_bytes.len() as u64,
+    );
+    {
+        let mut history = state.clipboard_history.lock().await;
+        history.insert(0, entry);
+        if history.len() > 20 {
+            history.truncate(20);
+        }
+    }
+
+    notify_clipboard_received(state, msg).await;
 }
 
 /// 处理文本剪贴板消息

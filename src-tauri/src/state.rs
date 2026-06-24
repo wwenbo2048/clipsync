@@ -64,6 +64,26 @@ impl ClipboardEntry {
         }
     }
 
+    /// 创建图片条目
+    pub fn new_image(
+        id: String,
+        timestamp: u64,
+        source: String,
+        file_size: u64,
+    ) -> Self {
+        Self {
+            id,
+            text: format!("🖼️ {}", format_size(file_size)),
+            timestamp,
+            source,
+            content_type: "image".to_string(),
+            file_path: None,
+            file_size: Some(file_size),
+            download_status: Some("done".to_string()),
+            transfer_id: None,
+        }
+    }
+
     /// 创建文件条目
     pub fn new_file(
         id: String,
@@ -194,6 +214,8 @@ pub struct AppState {
     pub written_placeholder_hash: Arc<AtomicU64>,
     /// 从远程收到的文本哈希（防止 monitor 回弹广播）
     pub last_remote_text_hash: Arc<AtomicU64>,
+    /// 从远程收到的图片哈希（防止 monitor 回弹广播）
+    pub last_remote_image_hash: Arc<AtomicU64>,
     /// Tauri AppHandle (用于发送事件到前端)
     pub app_handle: Arc<Mutex<Option<tauri::AppHandle>>>,
     /// 待接收的文件传输 (transfer_id -> PendingTransfer)
@@ -247,6 +269,7 @@ impl AppState {
             is_writing_clipboard: Arc::new(AtomicBool::new(false)),
             written_placeholder_hash: Arc::new(AtomicU64::new(0)),
             last_remote_text_hash: Arc::new(AtomicU64::new(0)),
+            last_remote_image_hash: Arc::new(AtomicU64::new(0)),
             app_handle: Arc::new(Mutex::new(None)),
             pending_transfers: Arc::new(Mutex::new(HashMap::new())),
             outgoing_files: Arc::new(Mutex::new(HashMap::new())),
@@ -257,5 +280,16 @@ impl AppState {
             autostart: Arc::new(Mutex::new(settings.autostart)),
             clipboard_write_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+}
+
+/// 格式化文件大小
+fn format_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
     }
 }

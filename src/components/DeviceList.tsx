@@ -1,16 +1,19 @@
 import { DeviceInfo } from "../App";
+import { useI18n } from "../i18n/I18nContext";
 
 interface DeviceListProps {
   devices: DeviceInfo[];
 }
 
 export function DeviceList({ devices }: DeviceListProps) {
+  const { t } = useI18n();
+
   if (devices.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">📡</div>
-        <p>暂未发现其他设备</p>
-        <p className="empty-hint">请确保其他设备在同一局域网中运行 ClipSync</p>
+        <p>{t.device_no_devices}</p>
+        <p className="empty-hint">{t.device_no_devices_hint}</p>
       </div>
     );
   }
@@ -18,11 +21,11 @@ export function DeviceList({ devices }: DeviceListProps) {
   const statusLabel = (status: DeviceInfo["status"]) => {
     switch (status) {
       case "Connected":
-        return "已连接";
+        return t.device_status_connected;
       case "Connecting":
-        return "连接中...";
+        return t.device_status_connecting;
       case "Offline":
-        return "离线";
+        return t.device_status_offline;
     }
   };
 

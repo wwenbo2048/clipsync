@@ -1,15 +1,18 @@
 import { NetworkInterface } from "../App";
+import { useI18n } from "../i18n/I18nContext";
 
 interface NetworkSelectorProps {
   interfaces: NetworkInterface[];
 }
 
 export function NetworkSelector({ interfaces }: NetworkSelectorProps) {
+  const { t } = useI18n();
+
   if (interfaces.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🌐</div>
-        <p>未发现可用网络接口</p>
+        <p>{t.network_no_interfaces}</p>
       </div>
     );
   }
@@ -20,12 +23,12 @@ export function NetworkSelector({ interfaces }: NetworkSelectorProps) {
   return (
     <div className="network-selector">
       <div className="network-info">
-        ClipSync 会自动在所有物理网卡上广播，无需手动选择
+        {t.network_auto_broadcast}
       </div>
 
       {physical.length > 0 && (
         <div className="interface-group">
-          <div className="group-label">物理网卡（自动广播）</div>
+          <div className="group-label">{t.network_physical}</div>
           {physical.map((iface) => (
             <InterfaceItem key={iface.ip} iface={iface} />
           ))}
@@ -34,7 +37,7 @@ export function NetworkSelector({ interfaces }: NetworkSelectorProps) {
 
       {virtual.length > 0 && (
         <div className="interface-group">
-          <div className="group-label">虚拟网卡（已跳过）</div>
+          <div className="group-label">{t.network_virtual}</div>
           {virtual.map((iface) => (
             <InterfaceItem key={iface.ip} iface={iface} dimmed />
           ))}
@@ -51,6 +54,7 @@ function InterfaceItem({
   iface: NetworkInterface;
   dimmed?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className={`interface-item ${dimmed ? "dimmed" : ""}`}>
       <div className="interface-icon">{dimmed ? "○" : "●"}</div>
@@ -59,7 +63,7 @@ function InterfaceItem({
         <div className="interface-ip">
           {iface.ip} / {iface.netmask}
         </div>
-        <div className="interface-broadcast">广播: {iface.broadcast}</div>
+        <div className="interface-broadcast">{t.network_broadcast}: {iface.broadcast}</div>
       </div>
     </div>
   );

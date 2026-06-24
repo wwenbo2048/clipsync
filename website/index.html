@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipSync - 跨平台剪贴板同步工具</title>
+    <meta name="description" content="局域网内自动发现设备，实时同步剪贴板文本、图片与文件，Mac 和 Windows 互通，支持 9 种语言，开源免费">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #161625;
+            --bg-card: rgba(255,255,255,0.04);
+            --bg-card-hover: rgba(255,255,255,0.07);
+            --accent: #4fc3f7;
+            --accent-2: #7c4dff;
+            --text: #e8e8ef;
+            --text-muted: #8e8ea0;
+            --border: rgba(255,255,255,0.08);
+            --radius: 12px;
+            --max-w: 1120px;
+        }
+
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+
+        .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+
+        /* ── Nav ── */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(15,15,26,0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-inner {
+            max-width: var(--max-w); margin: 0 auto; padding: 0 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 60px;
+        }
+        .nav-logo {
+            font-size: 20px; font-weight: 700; color: var(--text);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .nav-logo span { background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a { color: var(--text-muted); font-size: 14px; transition: color .2s; }
+        .nav-links a:hover { color: var(--text); }
+        .nav-cta {
+            padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+            background: var(--accent); color: #0f0f1a; transition: opacity .2s;
+        }
+        .nav-cta:hover { opacity: .85; }
+
+        /* mobile hamburger */
+        .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+        .hamburger span { width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: .3s; }
+
+        /* ── Hero ── */
+        .hero {
+            padding: 160px 0 100px; text-align: center;
+            background: radial-gradient(ellipse at 50% 0%, rgba(79,195,247,0.08) 0%, transparent 60%);
+            position: relative; overflow: hidden;
+        }
+        .hero::before {
+            content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 600px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(124,77,255,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            padding: 6px 16px; border-radius: 20px; font-size: 13px; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #4caf50; }
+        .hero h1 {
+            font-size: clamp(36px, 6vw, 64px); font-weight: 800; line-height: 1.15;
+            margin-bottom: 20px; letter-spacing: -0.02em;
+        }
+        .hero h1 .gradient {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: clamp(16px, 2.5vw, 20px); color: var(--text-muted);
+            max-width: 600px; margin: 0 auto 40px;
+        }
+        .hero-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 14px 32px; border-radius: 10px; font-size: 15px; font-weight: 600;
+            transition: transform .2s, box-shadow .2s; cursor: pointer; border: none;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: #fff; box-shadow: 0 4px 24px rgba(79,195,247,0.25);
+        }
+        .btn-secondary {
+            background: var(--bg-card); color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { background: var(--bg-card-hover); }
+        .btn svg { width: 20px; height: 20px; }
+
+        /* ── Features ── */
+        .section { padding: 100px 0; }
+        .section-label {
+            text-align: center; font-size: 13px; font-weight: 600;
+            color: var(--accent); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;
+        }
+        .section-title {
+            text-align: center; font-size: clamp(28px, 4vw, 40px); font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .section-desc {
+            text-align: center; color: var(--text-muted); max-width: 560px;
+            margin: 0 auto 56px; font-size: 16px;
+        }
+        .features-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+        }
+        .feature-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 32px 28px;
+            transition: transform .25s, background .25s;
+        }
+        .feature-card:hover { transform: translateY(-4px); background: var(--bg-card-hover); }
+        .feature-icon {
+            width: 48px; height: 48px; border-radius: 12px; display: flex;
+            align-items: center; justify-content: center; margin-bottom: 20px;
+            font-size: 24px;
+            background: linear-gradient(135deg, rgba(79,195,247,0.15), rgba(124,77,255,0.15));
+        }
+        .feature-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+        .feature-card p { font-size: 14px; color: var(--text-muted); line-height: 1.7; }
+
+        /* ── Screenshots ── */
+        .screenshots { background: var(--bg-secondary); }
+        .screenshots-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+        }
+        .screenshot-card {
+            border-radius: var(--radius); overflow: hidden;
+            border: 1px solid var(--border); transition: transform .3s;
+        }
+        .screenshot-card:hover { transform: scale(1.02); }
+        .screenshot-card img { width: 100%; display: block; }
+        .screenshot-card .caption {
+            padding: 14px 16px; font-size: 14px; color: var(--text-muted); text-align: center;
+            background: var(--bg-card);
+        }
+
+        /* ── How it works ── */
+        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+        .step { text-align: center; }
+        .step-num {
+            width: 52px; height: 52px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; margin: 0 auto 20px;
+            font-size: 22px; font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: #fff;
+        }
+        .step h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+        .step p { font-size: 14px; color: var(--text-muted); line-height: 1.7; }
+
+        /* ── Tech stack ── */
+        .tech { background: var(--bg-secondary); }
+        .tech-grid {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+        }
+        .tech-tag {
+            padding: 8px 20px; border-radius: 20px; font-size: 14px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        /* ── FAQ ── */
+        .faq-list { max-width: 700px; margin: 0 auto; }
+        .faq-item {
+            border-bottom: 1px solid var(--border); padding: 24px 0;
+        }
+        .faq-q {
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .faq-q::after {
+            content: '+'; font-size: 22px; color: var(--accent);
+            transition: transform .3s; flex-shrink: 0; margin-left: 12px;
+        }
+        .faq-item.open .faq-q::after { content: '−'; }
+        .faq-a {
+            max-height: 0; overflow: hidden; transition: max-height .35s ease;
+            color: var(--text-muted); font-size: 15px; line-height: 1.7;
+        }
+        .faq-item.open .faq-a { max-height: 200px; padding-top: 12px; }
+
+        /* ── Download CTA ── */
+        .cta-section {
+            text-align: center; padding: 100px 0;
+            background: radial-gradient(ellipse at 50% 100%, rgba(124,77,255,0.08) 0%, transparent 60%);
+        }
+        .cta-section h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 700; margin-bottom: 16px; }
+        .cta-section p { color: var(--text-muted); margin-bottom: 36px; font-size: 17px; }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border); padding: 32px 0;
+            text-align: center; color: var(--text-muted); font-size: 13px;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .nav-links, .nav-cta { display: none; }
+            .hamburger { display: flex; }
+            .mobile-menu {
+                display: none; position: fixed; top: 60px; left: 0; right: 0;
+                background: rgba(15,15,26,0.97); backdrop-filter: blur(16px);
+                border-bottom: 1px solid var(--border);
+                padding: 20px 24px; z-index: 99;
+            }
+            .mobile-menu.open { display: block; }
+            .mobile-menu a {
+                display: block; padding: 12px 0; color: var(--text-muted); font-size: 16px;
+                border-bottom: 1px solid var(--border);
+            }
+            .mobile-menu a:last-child { border: none; }
+
+            .hero { padding: 120px 0 60px; }
+            .hero-btns { flex-direction: column; align-items: center; }
+            .btn { width: 100%; max-width: 300px; justify-content: center; }
+
+            .features-grid, .screenshots-grid, .steps {
+                grid-template-columns: 1fr;
+            }
+            .section { padding: 60px 0; }
+            .section-title { margin-bottom: 12px; }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+            .screenshots-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ── Animations ── */
+        .fade-up {
+            opacity: 0; transform: translateY(30px);
+            transition: opacity .6s ease, transform .6s ease;
+        }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+    <div class="nav-inner">
+        <div class="nav-logo">
+            <img src="./logo.jpg" alt="ClipSync Logo" style="height: 28px; border-radius: 6px;">
+            <span>ClipSync</span>
+        </div>
+        <div class="nav-links">
+            <a href="#features">功能</a>
+            <a href="#how-it-works">使用方式</a>
+            <a href="#screenshots">截图</a>
+            <a href="#faq">常见问题</a>
+            <a href="https://github.com/wwenbo2048/clipsync" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </div>
+        <a href="#download" class="nav-cta">下载</a>
+        <div class="hamburger" onclick="document.querySelector('.mobile-menu').classList.toggle('open')">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+</nav>
+<div class="mobile-menu">
+    <a href="#features" onclick="this.parentElement.classList.remove('open')">功能</a>
+    <a href="#how-it-works" onclick="this.parentElement.classList.remove('open')">使用方式</a>
+    <a href="#screenshots" onclick="this.parentElement.classList.remove('open')">截图</a>
+    <a href="#faq" onclick="this.parentElement.classList.remove('open')">常见问题</a>
+    <a href="#download" onclick="this.parentElement.classList.remove('open')">下载</a>
+</div>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-badge fade-up"><span class="dot"></span> 开源免费 · Mac &amp; Windows 互通</div>
+        <h1 class="fade-up">跨设备剪贴板<br><span class="gradient">无缝同步</span></h1>
+        <p class="fade-up">局域网内自动发现设备，复制即同步。文本、图片、文件、文件夹，一键传输到所有已连接设备。</p>
+        <div class="hero-btns fade-up">
+            <a href="./download/ClipSync_aarch64.dmg" download class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 21.99 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.09997 21.99C7.78997 22.03 6.79997 20.65 5.95997 19.42C4.24997 16.9 2.92997 12.26 4.69997 9.08C5.56997 7.5 7.25997 6.49 8.82997 6.47C10.1 6.45 11.32 7.34 12.11 7.34C12.89 7.34 14.37 6.27 15.92 6.43C16.57 6.46 18.39 6.7 19.56 8.39C19.47 8.45 17.39 9.66 17.41 12.17C17.44 15.17 20.06 16.16 20.09 16.17C20.06 16.23 19.66 17.66 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
+                macOS 下载
+            </a>
+            <a href="./download/ClipSync_x64-setup.exe" download class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75L9 5.43V11.91L3 12ZM20 3V11.75L10 11.94V5.21L20 3ZM3 13L9 13.09V19.9L3 18.75V13ZM20 13.25V22L10 20.09V13.16L20 13.25Z"/></svg>
+                Windows 下载
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="section" id="features">
+    <div class="container">
+        <div class="section-label fade-up">核心功能</div>
+        <h2 class="section-title fade-up">为高效协作而生</h2>
+        <p class="section-desc fade-up">ClipSync 让你的多台设备共享同一个剪贴板，省去手动传输的繁琐。</p>
+        <div class="features-grid">
+            <div class="feature-card fade-up">
+                <div class="feature-icon">🔍</div>
+                <h3>自动发现</h3>
+                <p>无需手动配置 IP 地址，UDP 广播自动发现同一局域网内的所有设备，几秒内即可建立连接。</p>
+            </div>
+            <div class="feature-card fade-up">
+                <div class="feature-icon">⚡</div>
+                <h3>实时同步</h3>
+                <p>复制文本、图片或文件后自动同步到所有已连接设备，无需任何额外操作，真正实现"复制即同步"。</p>
+            </div>
+            <div class="feature-card fade-up">
+                <div class="feature-icon">📁</div>
+                <h3>文件传输</h3>
+                <p>支持文件和文件夹的跨设备传输，递归复制整个目录结构，大文件分片传输高效稳定。</p>
+            </div>
+            <div class="feature-card fade-up">
+                <div class="feature-icon">📋</div>
+                <h3>历史记录</h3>
+                <p>保留最近 20 条剪贴板记录，包括本机复制内容。每条记录都有独立复制按钮，随时回溯使用。</p>
+            </div>
+            <div class="feature-card fade-up">
+                <div class="feature-icon">⌨️</div>
+                <h3>全局快捷键</h3>
+                <p>可配置的快捷键（默认 Cmd+Shift+V）快速打开/隐藏窗口，不打断工作流。</p>
+            </div>
+            <div class="feature-card fade-up">
+                <div class="feature-icon">🌐</div>
+                <h3>多语言界面</h3>
+                <p>支持中文、英语、日语、韩语、德语、法语、西班牙语、葡萄牙语、俄语 9 种语言界面切换。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it works -->
+<section class="section" id="how-it-works" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-label fade-up">使用方式</div>
+        <h2 class="section-title fade-up">三步开始同步</h2>
+        <p class="section-desc fade-up">零配置、零注册，安装即用。</p>
+        <div class="steps">
+            <div class="step fade-up">
+                <div class="step-num">1</div>
+                <h3>安装并启动</h3>
+                <p>在 Mac 和 Windows 上分别安装 ClipSync 并启动。应用会自动在后台运行，显示在系统托盘中。</p>
+            </div>
+            <div class="step fade-up">
+                <div class="step-num">2</div>
+                <h3>自动连接</h3>
+                <p>确保设备在同一局域网内，ClipSync 会自动发现并连接对方设备。状态栏显示"已连接"即可开始。</p>
+            </div>
+            <div class="step fade-up">
+                <div class="step-num">3</div>
+                <h3>复制即同步</h3>
+                <p>在任意设备上复制文本或文件，内容会自动同步到所有已连接设备。在剪贴板历史中点击即可使用。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Screenshots -->
+<section class="section screenshots" id="screenshots">
+    <div class="container">
+        <div class="section-label fade-up">应用截图</div>
+        <h2 class="section-title fade-up">简洁优雅的界面</h2>
+        <p class="section-desc fade-up">深色主题、最小化设计，让你专注工作。</p>
+        <div class="screenshots-grid">
+            <div class="screenshot-card fade-up">
+                <img src="./images/image1.png" alt="剪贴板历史" loading="lazy">
+                <div class="caption">剪贴板历史 · 一目了然</div>
+            </div>
+            <div class="screenshot-card fade-up">
+                <img src="./images/image2.png" alt="设备列表" loading="lazy">
+                <div class="caption">设备列表 · 自动发现</div>
+            </div>
+            <div class="screenshot-card fade-up">
+                <img src="./images/image3.png" alt="网络设置" loading="lazy">
+                <div class="caption">网络管理 · 智能广播</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tech -->
+<section class="section tech">
+    <div class="container">
+        <div class="section-label fade-up">技术栈</div>
+        <h2 class="section-title fade-up">现代技术构建</h2>
+        <p class="section-desc fade-up">基于 Tauri v2 构建，轻量、安全、高性能。</p>
+        <div class="tech-grid fade-up">
+            <span class="tech-tag">Tauri v2</span>
+            <span class="tech-tag">React 18</span>
+            <span class="tech-tag">TypeScript</span>
+            <span class="tech-tag">Rust</span>
+            <span class="tech-tag">Tokio</span>
+            <span class="tech-tag">WebSocket</span>
+            <span class="tech-tag">UDP 广播</span>
+            <span class="tech-tag">Vite</span>
+        </div>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" id="faq">
+    <div class="container">
+        <div class="section-label fade-up">常见问题</div>
+        <h2 class="section-title fade-up">FAQ</h2>
+        <p class="section-desc fade-up">关于 ClipSync 的一些常见疑问。</p>
+        <div class="faq-list">
+            <div class="faq-item fade-up">
+                <div class="faq-q">ClipSync 是免费的吗？</div>
+                <div class="faq-a">是的，ClipSync 完全免费且开源（MIT License）。任何人都可以使用、修改和分发。</div>
+            </div>
+            <div class="faq-item fade-up">
+                <div class="faq-q">支持哪些操作系统和语言？</div>
+                <div class="faq-a">目前支持 macOS 10.15+ 和 Windows 10+（64 位），界面支持中文、英语、日语、韩语等 9 种语言。</div>
+            </div>
+            <div class="faq-item fade-up">
+                <div class="faq-q">需要联网吗？</div>
+                <div class="faq-a">不需要互联网连接。ClipSync 仅在局域网内工作，所有数据通过本地网络传输，不经过任何服务器。</div>
+            </div>
+            <div class="faq-item fade-up">
+                <div class="faq-q">为什么找不到其他设备？</div>
+                <div class="faq-a">请确认两台设备连接在同一局域网（同一路由器或 WiFi）下，并检查防火墙是否放行了 UDP 37020 和 TCP 37021 端口。</div>
+            </div>
+            <div class="faq-item fade-up">
+                <div class="faq-q">可以同步图片和文件吗？</div>
+                <div class="faq-a">当前版本支持纯文本、图片（包括截图等内存图片）、文件和文件夹的同步。所有数据在局域网内传输，安全可靠。</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Download CTA -->
+<section class="cta-section" id="download">
+    <div class="container">
+        <h2 class="fade-up">开始你的跨设备同步之旅</h2>
+        <p class="fade-up">免费、开源、隐私优先</p>
+        <div class="hero-btns fade-up">
+            <a href="./download/ClipSync_aarch64.dmg" download class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 21.99 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.09997 21.99C7.78997 22.03 6.79997 20.65 5.95997 19.42C4.24997 16.9 2.92997 12.26 4.69997 9.08C5.56997 7.5 7.25997 6.49 8.82997 6.47C10.1 6.45 11.32 7.34 12.11 7.34C12.89 7.34 14.37 6.27 15.92 6.43C16.57 6.46 18.39 6.7 19.56 8.39C19.47 8.45 17.39 9.66 17.41 12.17C17.44 15.17 20.06 16.16 20.09 16.17C20.06 16.23 19.66 17.66 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
+                macOS 下载
+            </a>
+            <a href="./download/ClipSync_x64-setup.exe" download class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75L9 5.43V11.91L3 12ZM20 3V11.75L10 11.94V5.21L20 3ZM3 13L9 13.09V19.9L3 18.75V13ZM20 13.25V22L10 20.09V13.16L20 13.25Z"/></svg>
+                Windows 下载
+            </a>
+        </div>
+        <div style="margin-top: 36px; font-size: 13px; color: var(--text-muted);">
+            <p>需要 macOS 10.15+ / Windows 10 64 位 · 无需联网 · 完全本地运行</p>
+            <p style="margin-top: 8px;">网络端口：UDP 37020 · TCP 37021</p>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="container">
+        <p>&copy; <span id="footer-year"></span> 杭州知珠网科技有限公司 · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">浙ICP备2020043430号-1</a></p>
+        <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
+    </div>
+</footer>
+
+<script>
+// Intersection Observer for fade-up animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+        }
+    });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+// FAQ toggle
+document.querySelectorAll('.faq-q').forEach(q => {
+    q.addEventListener('click', () => {
+        q.parentElement.classList.toggle('open');
+    });
+});
+</script>
+</body>
+</html>

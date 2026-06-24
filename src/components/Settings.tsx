@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "../i18n/I18nContext";
+import { languageMeta, Language } from "../i18n/translations";
 
 interface SettingsInfo {
   download_dir: string;
@@ -9,6 +11,7 @@ interface SettingsInfo {
 }
 
 export function Settings() {
+  const { t, lang, setLang } = useI18n();
   const [settings, setSettings] = useState<SettingsInfo | null>(null);
   const [editPath, setEditPath] = useState("");
   const [editShortcut, setEditShortcut] = useState("");
@@ -16,8 +19,10 @@ export function Settings() {
   const [savingShortcut, setSavingShortcut] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [togglingAutostart, setTogglingAutostart] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [version, setVersion] = useState("");
+  const langListRef = useRef<HTMLDivElement>(null);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -40,6 +45,12 @@ export function Settings() {
     loadSettings();
   }, [loadSettings]);
 
+  useEffect(() => {
+    if (langOpen && langListRef.current) {
+      langListRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [langOpen]);
+
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
@@ -47,16 +58,16 @@ export function Settings() {
 
   const handleSavePath = async () => {
     if (!editPath.trim()) {
-      showMessage("error", "路径不能为空");
+      showMessage("error", t.settings_path_empty);
       return;
     }
     setSaving(true);
     try {
       await invoke("set_download_dir", { path: editPath.trim() });
-      showMessage("success", "保存成功");
+      showMessage("success", t.settings_save_success);
       loadSettings();
     } catch (e: any) {
-      showMessage("error", e?.toString() || "保存失败");
+      showMessage("error", e?.toString() || t.settings_save_failed);
     }
     setSaving(false);
   };
@@ -65,10 +76,10 @@ export function Settings() {
     setClearing(true);
     try {
       const cleared = await invoke<number>("clear_cache");
-      showMessage("success", `已清除 ${formatSize(cleared)} 缓存`);
+      showMessage("success", t.settings_clear_success(formatSize(cleared)));
       loadSettings();
     } catch (e: any) {
-      showMessage("error", e?.toString() || "清除失败");
+      showMessage("error", e?.toString() || t.settings_clear_failed);
     }
     setClearing(false);
   };
@@ -77,10 +88,10 @@ export function Settings() {
     setSavingShortcut(true);
     try {
       await invoke("set_shortcut", { shortcut: editShortcut.trim() });
-      showMessage("success", "快捷键已保存");
+      showMessage("success", t.settings_shortcut_saved);
       loadSettings();
     } catch (e: any) {
-      showMessage("error", e?.toString() || "保存失败");
+      showMessage("error", e?.toString() || t.settings_save_failed);
     }
     setSavingShortcut(false);
   };
@@ -91,10 +102,10 @@ export function Settings() {
     setTogglingAutostart(true);
     try {
       await invoke("set_autostart", { enabled: next });
-      showMessage("success", next ? "已开启开机自动启动" : "已关闭开机自动启动");
+      showMessage("success", next ? t.settings_autostart_on : t.settings_autostart_off);
       loadSettings();
     } catch (e: any) {
-      showMessage("error", e?.toString() || "设置失败");
+      showMessage("error", e?.toString() || t.settings_autostart_failed);
     }
     setTogglingAutostart(false);
   };
@@ -103,7 +114,7 @@ export function Settings() {
     try {
       await invoke("open_log_dir");
     } catch (e: any) {
-      showMessage("error", e?.toString() || "打开日志目录失败");
+      showMessage("error", e?.toString() || t.settings_open_log_failed);
     }
   };
 
@@ -117,7 +128,7 @@ export function Settings() {
   if (!settings) {
     return (
       <div className="empty-state">
-        <p>加载设置中...</p>
+        <p>{t.settings_loading}</p>
       </div>
     );
   }
@@ -131,15 +142,15 @@ export function Settings() {
       )}
 
       <div className="settings-section">
-        <div className="settings-label">文件下载位置</div>
-        <div className="settings-desc">接收的文件将保存到此目录</div>
+        <div className="settings-label">{t.settings_download_dir}</div>
+        <div className="settings-desc">{t.settings_download_dir_desc}</div>
         <div className="settings-input-row">
           <input
             type="text"
             className="settings-input"
             value={editPath}
             onChange={(e) => setEditPath(e.target.value)}
-            placeholder="输入下载目录路径"
+            placeholder={t.settings_download_dir_placeholder}
           />
         </div>
         <button
@@ -147,83 +158,125 @@ export function Settings() {
           onClick={handleSavePath}
           disabled={saving || editPath === settings.download_dir}
         >
-          {saving ? "保存中..." : "保存"}
+          {saving ? t.settings_saving : t.settings_save}
         </button>
       </div>
 
       <div className="settings-section">
-        <div className="settings-label">缓存管理</div>
+        <div className="settings-label">{t.settings_cache_management}</div>
         <div className="settings-desc">
-          临时缓存大小: <strong>{formatSize(settings.cache_size)}</strong>
+          {t.settings_cache_size}: <strong>{formatSize(settings.cache_size)}</strong>
         </div>
         <button
           className="settings-btn danger"
           onClick={handleClearCache}
           disabled={clearing || settings.cache_size === 0}
         >
-          {clearing ? "清除中..." : "清除缓存"}
+          {clearing ? t.settings_clearing : t.settings_clear_cache}
         </button>
       </div>
 
       <div className="settings-section">
-        <div className="settings-label">全局快捷键</div>
-        <div className="settings-desc">按下快捷键快速打开/隐藏剪贴板历史窗口</div>
+        <div className="settings-label">{t.settings_shortcut}</div>
+        <div className="settings-desc">{t.settings_shortcut_desc}</div>
         <div className="settings-input-row">
           <input
             type="text"
             className="settings-input"
             value={editShortcut}
             onChange={(e) => setEditShortcut(e.target.value)}
-            placeholder="例如: CmdOrCtrl+Shift+V"
+            placeholder={t.settings_shortcut_placeholder}
           />
         </div>
         <div className="settings-desc" style={{ marginBottom: 8, opacity: 0.7 }}>
-          支持: Ctrl, Shift, Alt, Super, CmdOrCtrl + 字母/数字/F1-F12
+          {t.settings_shortcut_format}
         </div>
         <button
           className="settings-btn primary"
           onClick={handleSaveShortcut}
           disabled={savingShortcut || editShortcut === settings.shortcut}
         >
-          {savingShortcut ? "保存中..." : "保存"}
+          {savingShortcut ? t.settings_saving : t.settings_save}
         </button>
       </div>
 
       <div className="settings-section">
-        <div className="settings-label">开机自动启动</div>
-        <div className="settings-desc">启动电脑后自动运行 ClipSync，在后台提供剪贴板同步服务</div>
+        <div className="settings-label">{t.settings_autostart}</div>
+        <div className="settings-desc">{t.settings_autostart_desc}</div>
         <button
           className={`settings-btn ${settings.autostart ? "danger" : "primary"}`}
           onClick={handleToggleAutostart}
           disabled={togglingAutostart}
         >
           {togglingAutostart
-            ? "设置中..."
+            ? t.settings_autostart_setting
             : settings.autostart
-            ? "关闭自动启动"
-            : "开启自动启动"}
+            ? t.settings_autostart_disable
+            : t.settings_autostart_enable}
         </button>
         {settings.autostart && (
           <div className="settings-desc" style={{ marginTop: 6, opacity: 0.7 }}>
-            ✓ 当前已开启
+            {t.settings_autostart_enabled}
           </div>
         )}
       </div>
 
       <div className="settings-section">
-        <div className="settings-label">日志管理</div>
-        <div className="settings-desc">运行日志用于排查剪贴板同步异常问题</div>
+        <div className="settings-label">{t.settings_log}</div>
+        <div className="settings-desc">{t.settings_log_desc}</div>
         <button
           className="settings-btn primary"
           onClick={handleOpenLogDir}
         >
-          打开日志目录
+          {t.settings_open_log}
         </button>
       </div>
 
       <div className="settings-section settings-version">
-        <div className="settings-version-label">当前版本</div>
-        <div className="settings-version-value">v{version || "未知"}</div>
+        <div className="settings-version-label">{t.settings_version}</div>
+        <div className="settings-version-value">v{version || t.settings_version_unknown}</div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-label">{t.lang_section}</div>
+        <div className="settings-desc">{t.lang_desc}</div>
+        <div className="lang-select-wrapper">
+          <button
+            className={`lang-select-trigger ${langOpen ? "open" : ""}`}
+            onClick={() => setLangOpen((v) => !v)}
+          >
+            <svg className="lang-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <span className="lang-current-name">{languageMeta[lang].nativeName}</span>
+            <svg className={`lang-chevron ${langOpen ? "up" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {langOpen && (
+            <div className="lang-select-list" ref={langListRef}>
+              {(Object.keys(languageMeta) as Language[]).map((code) => (
+                <button
+                  key={code}
+                  className={`lang-option ${code === lang ? "active" : ""}`}
+                  onClick={() => {
+                    setLang(code);
+                    setLangOpen(false);
+                  }}
+                >
+                  <span className="lang-option-name">{languageMeta[code].nativeName}</span>
+                  {code === lang && (
+                    <svg className="lang-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

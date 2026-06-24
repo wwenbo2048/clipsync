@@ -6,6 +6,7 @@ import { DeviceList } from "./components/DeviceList";
 import { ClipHistory } from "./components/ClipHistory";
 import { NetworkSelector } from "./components/NetworkSelector";
 import { Settings } from "./components/Settings";
+import { useI18n } from "./i18n/I18nContext";
 
 export interface DeviceInfo {
   id: string;
@@ -47,6 +48,7 @@ export interface NetworkInterface {
 }
 
 function App() {
+  const { t } = useI18n();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [history, setHistory] = useState<ClipboardEntry[]>([]);
   const [status, setStatus] = useState<StatusInfo | null>(null);
@@ -187,25 +189,25 @@ function App() {
           className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
           onClick={() => setActiveTab("history")}
         >
-          剪贴板历史
+          {t.tab_history}
         </button>
         <button
           className={`tab-btn ${activeTab === "devices" ? "active" : ""}`}
           onClick={() => setActiveTab("devices")}
         >
-          设备 ({devices.length})
+          {t.tab_devices.replace("{count}", String(devices.length))}
         </button>
         <button
           className={`tab-btn ${activeTab === "network" ? "active" : ""}`}
           onClick={() => setActiveTab("network")}
         >
-          网络
+          {t.tab_network}
         </button>
         <button
           className={`tab-btn ${activeTab === "settings" ? "active" : ""}`}
           onClick={() => setActiveTab("settings")}
         >
-          设置
+          {t.tab_settings}
         </button>
       </div>
 
